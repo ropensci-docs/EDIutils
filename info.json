@@ -1,0 +1,12 @@
+{
+  "commit": {
+    "commit": "634f6eb4feaf01821b4f8f020b206158c60fee9a",
+    "author": "Colin Smith <colin.smith@wisc.edu>",
+    "time": "2022-06-28 21:51:44",
+    "files": 8,
+    "merge": false,
+    "message": "V1.0.1 (#42)\n\nThis release fixes failing CRAN Checks resulting from the 'vcr' dependency."
+  },
+  "repo": "https://github.com/ropensci/EDIutils",
+  "pkg": "EDIutils"
+}
