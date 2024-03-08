@@ -1,0 +1,12 @@
+{
+  "commit": {
+    "commit": "790f5e270ec973ebe231f623985dbd494dd7e429",
+    "author": "Colin Smith <colin.smith@wisc.edu>",
+    "time": "2023-10-10 17:21:04",
+    "files": 6,
+    "merge": false,
+    "message": "Prepare for release of version 1.0.3\n\n* Increment patch version number\r\n* Update NEWS with recent changes\r\n* Build README\r\n* Update codemeta\r\n* Update codecov.io link\r\n* Update cran-comments"
+  },
+  "repo": "https://github.com/ropensci/EDIutils",
+  "pkg": "EDIutils"
+}

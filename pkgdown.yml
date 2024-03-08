@@ -1,0 +1,14 @@
+pandoc: 2.16.2
+pkgdown: 2.0.7
+pkgdown_sha: ~
+articles:
+  evaluate_and_upload: evaluate_and_upload.html
+  retrieve_citations: retrieve_citations.html
+  retrieve_downloads: retrieve_downloads.html
+  search_and_access: search_and_access.html
+  tests_requiring_authentication: tests_requiring_authentication.html
+last_built: 2024-03-08T06:24Z
+urls:
+  reference: https://docs.ropensci.org/EDIutils/reference
+  article: https://docs.ropensci.org/EDIutils/articles
+
