@@ -1,0 +1,13 @@
+{
+  "commit": {
+    "commit": "435f02c2859b0fe7b1b09aa8c357b9331610e4bb",
+    "author": "Colin Smith <colin.smith@wisc.edu>",
+    "time": "2026-08-19T17:34:56Z",
+    "files": 1,
+    "merge": false,
+    "message": "Update cran-comments\n"
+  },
+  "repo": "https://github.com/ropensci/EDIutils",
+  "pkg": "EDIutils",
+  "time": "2026-09-02T16:50:52Z"
+}
