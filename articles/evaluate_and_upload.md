@@ -1,0 +1,269 @@
+# Evaluate and Upload Data
+
+*The EDI data repository has a
+“[staging](https://portal-s.edirepository.org/nis/home.jsp)” environment
+to test the upload and rendering of new data packages before publishing
+to “[production](https://portal.edirepository.org/nis/home.jsp)”. These
+environments are functionally equivalent but the contained values are
+independent. For example, a data package identifier reserved by a user
+in “staging” will not work in “production” and vise versa.*
+
+``` r
+
+library(EDIutils)
+```
+
+Evaluation and upload to the repository requires data entities are
+described with EML metadata. There are many tools for creating EML, EDI
+supports two: the
+[EMLassemblyline](https://ediorg.github.io/EMLassemblyline/) R package
+for programmatic workflows, and the
+[ezEML](https://ezeml.edirepository.org/eml/) web form wizard. Research
+groups managing large volumes of metadata may want to consider the [LTER
+core-metabase](https://github.com/lter/LTER-core-metabase).
+
+## Authenticate
+
+Authentication is required for all API methods. Effective July 30, 2026,
+the EDI repository requires mandatory authenticated access for all REST
+API endpoints. You can obtain a free EDI user profile and generate an
+API access key from the [EDI IAM
+Portal](https://auth.edirepository.org/auth/ui/signin).
+
+There are four options for authenticating:
+
+``` r
+
+# 1. (Recommended) Authenticate using your EDI-API key
+login(key = "your_api_key")
+
+# 2. (Recommended) Programmatically with a file containing your API key
+# File contents: key = your_api_key
+login(config = paste0(tempdir(), "/config.txt"))
+
+# 3. Interactively at the console (prompts for API key or legacy credentials)
+login()
+
+# 4. (Legacy fallback) Programmatically with username and password
+login(userId = "my_name", userPass = "my_secret")
+```
+
+Setting the environment variable `EDI_API_KEY` (either through
+[`login()`](https://docs.ropensci.org/EDIutils/reference/login.md) or
+directly in your `.Renviron` file) will automatically authenticate all
+requests. For legacy credentials,
+[`login()`](https://docs.ropensci.org/EDIutils/reference/login.md)
+exchanges your credentials for temporary (~10 hour) tokens written to
+the `EDI_TOKEN` and `AUTH_TOKEN` system environment variables.
+
+## Reserve a Data Package ID
+
+Data package reservations prevent conflicting use of the same
+identifier.
+
+``` r
+
+# Create reservation
+identifier <- create_reservation(scope = "edi", env = "staging")
+identifier
+#> [1] 595
+```
+
+## Evaluate
+
+Evaluation checks for metadata accuracy and completeness.
+
+``` r
+
+
+# Evaluate data package
+transaction <- evaluate_data_package(
+ eml = paste0(tempdir(), "/edi.595.1.xml"), 
+ env = "staging")
+transaction
+#> [1] "evaluate_163966785813042760"
+
+# Check status
+status <- check_status_evaluate(transaction, env = "staging")
+status
+#> [1] TRUE
+```
+
+## Interpreting the Evaluation Report
+
+### Report Summary
+
+The evaluation report summary provides a quick look at the data package
+evaluation results. Specifically, the total number of checks run and how
+many of these checks resulted in statuses of “valid”, “info”, “warn”, or
+“error”.
+
+``` r
+
+# Summarize report
+read_evaluate_report_summary(transaction, env = "staging")
+#> ===================================================
+#>   EVALUATION REPORT
+#> ===================================================
+#>
+#> PackageId: edi.595.1
+#> Report Date/Time: 2021-12-16T22:49:25
+#> Total Quality Checks: 29
+#> Valid: 21
+#> Info: 8
+#> Warn: 0
+#> Error: 0
+```
+
+The meaning of these status messages:
+
+- Valid - The result of the quality check matches the expectation.
+- Info - The result of the quality check may or may not match the
+  expectation, but since the expectation is not required, information is
+  returned instead of a Warn or Error.
+- Warn - The result of the quality check does not match the expectation.
+  A match is not explicitly required to publish the data package, but
+  strongly recommended.
+- Error - The result of the quality check does not match the
+  expectation. A match is required before the data package can be
+  published.
+
+Any evaluation check that results in a warning or error status should be
+resolved before moving ahead (note that errors must be corrected).
+Resolve problems with the data and metadata and repeat the evaluation
+process until all errors (and preferably all warnings) are resolved.
+
+### Full Report
+
+The full evaluation report provides detailed information on each check
+and some diagnostics to help resolve issues. The full report can be
+printed to the console or written to file as plain text or as html to be
+viewed in a web browser (recommended). See
+[`?read_evaluate_report`](https://docs.ropensci.org/EDIutils/reference/read_evaluate_report.md)
+for details.
+
+``` r
+
+# Read the evaluation report
+report <- read_evaluate_report(transaction, as = "char", env = "staging")
+message(report)
+#> ===================================================
+#>   EVALUATION REPORT
+#> ===================================================
+#>   
+#> PackageId: edi.595.1
+#> Report Date/Time: 2021-12-16T08:17:40
+#> Total Quality Checks: 29
+#> Valid: 21
+#> Info: 8
+#> Warn: 0
+#> Error: 0
+#> 
+#> ---------------------------------------------------
+#>   DATASET REPORT
+#> ---------------------------------------------------
+#>   
+#> IDENTIFIER: packageIdPattern
+#> NAME: packageId pattern matches "scope.identifier.revision"
+#> DESCRIPTION: Check against LTER requirements for scope.identifier.revision
+#> EXPECTED: 'scope.n.m', where 'n' and 'm' are integers and 'scope' is one ...
+#> FOUND: edi.595.1
+#> STATUS: valid
+#> EXPLANATION: 
+#> SUGGESTION: 
+#> REFERENCE: 
+#> 
+#> IDENTIFIER: emlVersion
+#> NAME: EML version 2.1.0 or beyond
+#> DESCRIPTION: Check the EML document declaration for version 2.1.0 or higher
+#> EXPECTED: eml://ecoinformatics.org/eml-2.1.0 or higher
+#> FOUND: https://eml.ecoinformatics.org/eml-2.2.0
+#> STATUS: valid
+#> EXPLANATION: Validity of this quality report is dependent on this check ...
+#> SUGGESTION: 
+#> REFERENCE: 
+#> ...
+```
+
+The Evaluation Report is broken into multiple parts, always starting
+with the Dataset Report, and followed by an Entity Report for each
+entity (data object/file) included in the data package. These are
+differentiated by header lines with the Entity Name and Identifier.
+
+The Dataset and Entity Reports share the same layout:
+
+- \# - The number of the quality check
+- Identifier - The identifier of the quality check
+- Status - The status of the result of the quality check
+- Quality Check - Describes the type of the quality check (data,
+  metadata, or congruency), the system (knb, lter), and the status that
+  results on failure
+- Name - The name of the quality check
+- Description - Brief description of the quality check
+- Expected - The result that the quality check is expecting
+- Found - The actual result of the quality check
+- Explanation - Additional information describing the rationale of the
+  quality check
+- Suggestion - Potential data package improvements to implement to pass
+  the quality check
+- Reference - Source of the rationale for the quality check or where to
+  find more information
+
+Parse through the document and address any errors or warnings (denoted
+by the Error and Warn labels). To understand why a quality check failed,
+first read the Name and Description of the quality check to determine
+what was being tested and how the test was being conducted. Then,
+compare the Expected result to what was Found. If it is still not clear
+what caused the failure, try to gain additional insight from the
+Explanation, Suggestion, and Reference fields, or contact the EDI Data
+Curation Team for clarification (<info@edirepository.org>).
+
+## Upload
+
+Upload after errors and warnings are fixed.
+
+``` r
+
+# Create a new data package
+transaction <- create_data_package(
+ eml = paste0(tempdir(), "/edi.595.1.xml"), 
+ env = "staging")
+transaction
+#> [1] "create_163966765080210573__edi.595.1"
+
+# Check status
+status <- check_status_create(
+ transaction = transaction, 
+ env = "staging")
+status
+#> [1] TRUE
+```
+
+## Update
+
+Update is the same as upload, but with an incremented data package
+version number (e.g. “edi.595.2” supersedes “edi.595.1”). *NOTE: The new
+identifier must be added to the “packageId” element in the EML and as
+the new EML file name.*
+
+``` r
+
+#' # Update data package
+#' transaction <- update_data_package(
+#'   eml = paste0(tempdir(), "/edi.595.2.xml"), 
+#'   env = "staging")
+#' transaction
+#' #> [1] "update_edi.595_163966788658131920__edi.595.2"
+#' 
+#' # Check status
+#' status <- check_status_update(
+#'   transaction = transaction, 
+#'   env = "staging")
+#' status
+#' #> [1] TRUE
+```
+
+Once everything looks good in the “staging” environment, then repeat the
+above reservation and upload steps in the “production” environment where
+the data package will be assigned a DOI and made discoverable with other
+published data.

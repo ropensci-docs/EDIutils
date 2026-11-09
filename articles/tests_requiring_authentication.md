@@ -1,0 +1,174 @@
+# Tests Requiring Authentication
+
+*This vignette is for `EDIutils` maintainers and developers.*
+
+Some tests require authentication and a minimal data package for
+evaluation and upload. This vignette demonstrates how to create and run
+these tests with `testthat`.
+
+``` r
+
+library(EDIutils)
+```
+
+## Get an EDI User Account
+
+Request accounts via <info@edirepository.org>
+
+## Use the “staging” Environment!
+
+The EDI repository “staging” environment is a sandbox for testing data
+package rendering, etc. Do not use the “production” environment for
+testing. The “production” environment is where publication quality data
+are released.
+
+## Create Tests
+
+#### Requiring Authentication
+
+The first line of any test requiring authentication should include
+`skip_if_logged_out()`. This is an internal use only function located in
+R/utilities.R. Tests including this line will be skipped unless the R
+environment variable `EDI_API_KEY` is set, or the legacy `EDI_TOKEN` and
+`AUTH_TOKEN` variables are set. Authenticate by passing
+`login(key = "your_key")` or by defining the environment variable
+`EDI_API_KEY`.
+
+Note that computationally heavy tests are skipped when using an API key
+unless the environment variable `RUN_ALL_TESTS` is set to `"true"`.
+
+Example:
+
+``` r
+
+context("Create journal citation")
+
+testthat::test_that("Test attributes of returned object", {
+  skip_if_logged_out()
+  journalCitationId <- create_journal_citation(
+    packageId = get_test_package(), 
+    articleDoi = "10.1890/11-1026.1",
+    articleUrl = "https://doi.org/10.1890/11-1026.1",
+    articleTitle = "Corridors promote fire via connectivity and edge effects",
+    journalTitle = "Ecological Applications",
+    relationType = "IsCitedBy",
+    env = "staging")
+  expect_type(journalCitationId, "double")
+  res <- delete_journal_citation(journalCitationId, env = "staging")
+  expect_true(res)
+})
+```
+
+#### Requiring Data Package Evaluation or Upload
+
+If evaluation or upload of a data package is required by the test, then
+include a second line `skip_if_missing_eml_config()`. Tests including
+this line will be skipped unless the R environment variables
+`EDI_USERID` and `EDI_TEST_URL` are set. Use `config_test_eml()` to set
+these variables.
+
+To set up the minimal test data package:
+
+1.  Copy the test data object at inst/extdata/data.txt to a web
+    accessible location. The EDI repository will download this data
+    object by it’s URL. The URL cannot present any redirects or else the
+    EDI repository will not have access.
+
+2.  Add `create_test_eml()` to create an EML metadata file within the
+    context of the test. Data packages require unique identifiers that
+    often change from test to test.
+
+Example:
+
+``` r
+
+context("Evaluate data package")
+
+testthat::test_that("Test attributes of returned object", {
+  skip_if_logged_out()
+  skip_if_missing_eml_config()
+  # Create data package for evaluation
+  identifier <- create_reservation(scope = "edi", env = "staging")
+  packageId <- paste0("edi.", identifier, ".1")
+  eml <- create_test_eml(
+    path = tempdir(), 
+    packageId = packageId,
+    edi_id = "EDI-543afa80c859825d35d37d9111c24a4a65a0ff3e")
+  on.exit(file.remove(eml), add = TRUE, after = FALSE)
+  # Evaluate
+  transaction <- evaluate_data_package(eml, env = "staging")
+  res <- check_status_evaluate(transaction, env = "staging")
+  expect_true(res)
+  # Read evaluation report
+  report <- read_evaluate_report(transaction, env = "staging")
+  expect_true("xml_document" %in% class(report))
+  delete_reservation("edi", identifier, env = "staging")
+})
+```
+
+## Run Tests
+
+### Standard Mock Tests (Fast / Offline)
+
+By default, the test suite uses `vcr` cassettes for fast, offline
+testing:
+
+1.  Run the test suite:
+
+    ``` r
+
+    devtools::test()
+    ```
+
+### Live HTTP Tests Against Staging
+
+To run tests against the live PASTA staging environment instead of
+recorded VCR cassettes:
+
+1.  Set your staging API key:
+
+    ``` r
+
+    Sys.setenv("EDI_API_KEY" = "your_staging_api_key")
+    ```
+
+2.  (Optional) Configure test data package if running package lifecycle
+    tests:
+
+    ``` r
+
+    config_test_eml()
+    ```
+
+3.  Enable all authenticated tests:
+
+    ``` r
+
+    Sys.setenv("RUN_ALL_TESTS" = "true")
+    ```
+
+4.  Bypass VCR cassette playback:
+
+    ``` r
+
+    Sys.setenv("VCR_TURN_OFF" = "true")
+    ```
+
+5.  **Request Throttling**: When running real HTTP requests, the test
+    suite automatically introduces a delay between requests (default 1
+    second) via `httr` response callbacks to avoid PASTA rate limits
+    (HTTP 429). You can customize or disable this delay via the
+    `EDI_TEST_THROTTLE_DELAY` environment variable:
+
+    ``` r
+
+    # Set custom delay in seconds (e.g. 2s or 0s)
+    Sys.setenv("EDI_TEST_THROTTLE_DELAY" = "1")
+    ```
+
+6.  Run the test suite:
+
+    ``` r
+
+    devtools::test()
+    ```
